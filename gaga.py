@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-KESTREL-7 — TELZ FLOOD (Production)
+KESTREL-7 — TELZ FLOOD (Production + STOP)
 Muallif: @wulox
 """
 import threading
@@ -114,6 +114,11 @@ def start_flood(telefon):
     flood_thread.start()
     return True
 
+def stop_flood():
+    global flood_active
+    flood_active = False
+    return True
+
 # ---------- FLASK APP ----------
 app = Flask(__name__)
 
@@ -131,24 +136,32 @@ HTML = """
         .dev { color: #f80; font-size: 14px; }
         input, button { padding: 14px; font-size: 18px; border: none; border-radius: 10px; width: 100%; margin: 5px 0; }
         input { background: #222; color: #0f0; }
-        button { background: #0f0; color: #000; font-weight: bold; cursor: pointer; }
+        .btn-start { background: #0f0; color: #000; font-weight: bold; cursor: pointer; }
+        .btn-stop { background: #f00; color: #fff; font-weight: bold; cursor: pointer; }
         #log { background: #111; padding: 10px; height: 300px; overflow-y: scroll; border: 1px solid #0f0; white-space: pre-wrap; font-size: 12px; }
         .info { color: #aaa; }
+        .flex { display: flex; gap: 10px; }
+        .flex button { flex: 1; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>⚡ KESTREL-7</h1>
         <p class="dev">👨‍💻 Developer: @wulox</p>
-        <p class="info">To‘xtatish uchun ilovani yoping</p>
+        <p class="info">Boshlash — flood ishga tushadi. To‘xtatish — floodni to‘xtatadi.</p>
         <input id="phone" placeholder="998901234567" value="{{ default_phone }}">
-        <button id="startBtn">🚀 BOSHLASH (TO‘XTAMAYDI)</button>
+        <div class="flex">
+            <button id="startBtn" class="btn-start">🚀 BOSHLASH</button>
+            <button id="stopBtn" class="btn-stop">⛔ TO‘XTAT</button>
+        </div>
         <div id="log">⏳ Yuklanmoqda...</div>
     </div>
     <script>
         const logDiv = document.getElementById('log');
         const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
         const phoneInput = document.getElementById('phone');
+
         function fetchLog() {
             fetch('/logs')
                 .then(r => r.text())
@@ -156,6 +169,7 @@ HTML = """
                 .catch(console.error);
         }
         setInterval(fetchLog, 1000);
+
         startBtn.onclick = () => {
             const phone = phoneInput.value.trim();
             if (!phone) return alert('Raqam kiriting');
@@ -163,6 +177,13 @@ HTML = """
                 .then(r => r.json())
                 .then(d => alert(d.status));
         };
+
+        stopBtn.onclick = () => {
+            fetch('/stop', { method: 'POST' })
+                .then(r => r.json())
+                .then(d => alert(d.status));
+        };
+
         fetchLog();
     </script>
 </body>
@@ -190,21 +211,21 @@ def start():
     else:
         return jsonify({'status': '⚠️ ALLAQACHON ISHLYAPTI'})
 
-# ---------- SELF-PING (Render.com free tier sleep prevention) ----------
+@app.route('/stop', methods=['POST'])
+def stop():
+    stop_flood()
+    return jsonify({'status': '⛔ TO‘XTATISH SO‘RALDI'})
+
+# ---------- SELF-PING ----------
 def self_ping():
-    # Render da PORT muhit o'zgaruvchisi 10000 bo'ladi, lekin localhost ishlaydi
-    host = "http://localhost:8080"
     while True:
-        time.sleep(240)  # 4 daqiqa
+        time.sleep(240)
         try:
-            requests.get(host)
+            requests.get('http://localhost:8080')
         except:
             pass
 
 # ---------- ISHGA TUSHIRISH ----------
 if __name__ == '__main__':
-    # Self-ping thread (faqat Render yoki boshqa hostingda)
-    ping_thread = threading.Thread(target=self_ping, daemon=True)
-    ping_thread.start()
-    # Waitress production server
+    threading.Thread(target=self_ping, daemon=True).start()
     serve(app, host='0.0.0.0', port=8080, threads=8)
